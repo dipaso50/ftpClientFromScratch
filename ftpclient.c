@@ -10,7 +10,8 @@
 #include "str.h"
 #include "srch.h"
 
-char buffer[256];
+#define BUFFER_LEN 255
+
 char* CMD_LIST = "LIST";
 char* CMD_PASV = "PASV\n";
 char* CMD_QUIT = "QUIT\n";
@@ -25,16 +26,16 @@ void error(const char *msg)
     exit(0);
 }
 
-int portFromServerResp(){
+int portFromServerResp(char *buff){
 
-    int init = linearSearch(buffer, strlen(buffer), '(');
-    int fin = linearSearch(buffer, strlen(buffer), ')');
+    int init = linearSearch(buff, strlen(buff), '(');
+    int fin = linearSearch(buff, strlen(buff), ')');
 
 #if defined PRINTDEBUG
     printf("init %d, fin %d \n", init, fin);
 #endif 
 
-    char *strip = substr(buffer, init + 1, fin);
+    char *strip = substr(buff, init + 1, fin);
 
 #if defined PRINTDEBUG
     printf("strip is %s \n", strip);
@@ -66,21 +67,29 @@ int calculatePasivePort(char *strip){
 }
 void listRemote(int controlfd, char* command){
 
-    writefd(controlfd, CMD_PASV);
-    readfd(controlfd);
+    char *buff = (char*) calloc(BUFFER_LEN, sizeof(char));
 
-    int pasivePort = portFromServerResp();
+    writefd(controlfd, CMD_PASV);
+
+    readfd(controlfd, buff, BUFFER_LEN);
+
+    printf("%s\n",buff);
+
+    int pasivePort = portFromServerResp(buff);
 
     int pasivefd = openSocket(pasivePort, server);
 
-     writefd(controlfd, command);
+    writefd(controlfd, command);
 
-     readfd(pasivefd);
+    readfdPrint(pasivefd);
 
-     readfd(controlfd);
-     readfd(controlfd);
+    readfdPrint(controlfd);
 
-     close(pasivefd);
+    writefd(controlfd, "\n");
+    readfdPrint(controlfd);
+
+    free(buff);
+    close(pasivefd);
 }
 
 void writefd(int fd, char* buff){
@@ -91,16 +100,25 @@ void writefd(int fd, char* buff){
         error("ERROR writing to socket");
 }
 
-void readfd(int fd){
-	bzero(buffer,256);
+void readfdPrint(int fd){
 
-    int n = read(fd,buffer,255);
+    char *buff = (char*) calloc(BUFFER_LEN, sizeof(char));
+    
+    readfd(fd, buff, BUFFER_LEN);
 
-    if(n < 0){
+    printf("%s\n",buff);
+
+    free(buff);
+}
+
+int readfd(int fd, char *buf, int len){
+
+    int n = read(fd,buf,len);
+
+    if(n < 0)
         error("Error reading socket");
-    }
 
-    printf("%s\n",buffer);
+    return n;
 }
 
 int openSocket(int port, struct hostent *server){
@@ -133,33 +151,46 @@ int openSocket(int port, struct hostent *server){
 }
 
 void quit(int controlfd){
+    int buflen = 255;
+    char *buff = (char*) calloc(buflen, sizeof(char));
+
     writefd(controlfd, CMD_QUIT);
-    readfd(controlfd);
+    readfd(controlfd, buff, buflen);     
+    printf("%s\n",buff);
+
+    free(buff);
 }
 
 void retrFile(int controlfd, char* command){
 
-    writefd(controlfd, CMD_PASV);
-    readfd(controlfd);
+    char *buff = (char*) calloc(BUFFER_LEN, sizeof(char));
 
-    int pasivePort = portFromServerResp();
+    writefd(controlfd, CMD_PASV);
+
+    readfd(controlfd, buff,BUFFER_LEN );
+
+    printf("%s\n",buff);
+
+    int pasivePort = portFromServerResp(buff);
 
     int pasivefd = openSocket(pasivePort, server);
 
     writefd(controlfd, command);
 
-    readfd(pasivefd);
+    readfdPrint(pasivefd);
 
-    readfd(controlfd);
-    readfd(controlfd);
+    readfdPrint(controlfd);
 
+    free(buff);
     close(pasivefd);
+
 }
 
 
 int main(int argc, char *argv[])
 {
     int controlfd, portno;
+    char buffer[BUFFER_LEN];
 
     if (argc < 3) {
        fprintf(stderr,"usage %s hostname port\n", argv[0]);
@@ -172,16 +203,24 @@ int main(int argc, char *argv[])
 
     controlfd = openSocket(portno, server);
 
-    readfd(controlfd);
+    bzero(buffer,BUFFER_LEN);
+
+    readfd(controlfd, buffer, BUFFER_LEN);
+
+    printf("%s\n",buffer);
 
     while(1){		
         printf(">>>");
 
-        bzero(buffer,256);
+        bzero(buffer,BUFFER_LEN);
         fgets(buffer,255,stdin);
 
         char * cmdcpy = (char*) calloc(sizeof(char) , strlen(buffer));
         strcpy(cmdcpy, buffer);
+
+#if defined PRINTDEBUG
+        printf("Command (%s)\n", cmdcpy);
+#endif
 
         if(startwith(buffer, CMD_LIST)){
             listRemote(controlfd, cmdcpy);
@@ -191,8 +230,10 @@ int main(int argc, char *argv[])
             quit(controlfd);
             break;
         }else{
+            bzero(buffer,BUFFER_LEN);
             writefd(controlfd, cmdcpy);
-            readfd(controlfd);
+            readfd(controlfd, buffer, BUFFER_LEN);
+            printf("%s\n",buffer);
         }
 
         free(cmdcpy);

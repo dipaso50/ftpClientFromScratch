@@ -10,10 +10,11 @@
 #if !defined(FTPCLIENT_H)
 #define FTPCLIENT_H
 void writefd(int fd, char*buff);
-void readfd(int fd);
+int readfd(int fd , char *buf, int len);
+void readfdPrint(int fd);
 int openSocket(int port, struct hostent* server);
 int calculatePasivePort(char *strip);
-int portFromServerResp();
+int portFromServerResp(char*buff);
 void listRemote(int controlfd, char* command);
 void quit(int controlfd);
 void retrFile(int controlfd, char* command);
