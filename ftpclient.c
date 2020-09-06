@@ -19,7 +19,6 @@ char* CMD_RETR = "RETR";
 
 struct hostent *server;
 
-
 void error(const char *msg)
 {
     perror(msg);
@@ -161,6 +160,66 @@ void quit(int controlfd){
     free(buff);
 }
 
+int writeInFile(char *filename, char* data){
+
+    FILE *fp = fopen(filename,  "w");
+     
+    if(fp == NULL) {
+       printf("file couldn't be opened\n");
+       exit(1);
+    } 
+
+    int count = fwrite(data,1,strlen(data),fp);
+     
+    printf("%d bytes written into file %s\n ",count, filename);
+         
+    fclose(fp); 
+
+    return count;
+}
+
+RetrFile* getFileParams(char * command, RetrFile * ret){
+     char *token = strtok(command, " ");
+     char * cmd;
+
+     int i = 0;
+
+     while(token) {
+         if(i == 1){
+            ret->remoteFileName = (char*) calloc(strlen(token), sizeof(char));
+            strcpy(ret->remoteFileName, token);
+         }else if(i == 2){
+            ret->localFileName = (char*) calloc(strlen(token), sizeof(char));
+            strcpy(ret->localFileName, token);
+         }else if(i == 0){
+            cmd =  (char*) calloc(strlen(token), sizeof(char));
+            strcpy(cmd, token);
+         }
+
+         i++;
+         token = strtok(NULL, " ");
+     }
+
+     int total = strlen(ret->remoteFileName) + strlen(cmd) + 2;
+
+     ret->command = (char*) calloc(total, sizeof(char));
+
+     strcat(ret->command, cmd);
+     strcat(ret->command, " ");
+     strcat(ret->command, ret->remoteFileName);
+     strcat(ret->command, "\n");
+
+#if defined PRINTDEBUG
+     printf("Params localFileName %s, remoteFileName %s, command %s",
+             ret->localFileName, ret->remoteFileName ,
+             ret->command);
+#endif
+
+     free(cmd);
+
+    return ret;    
+}
+
 void retrFile(int controlfd, char* command){
 
     char *buff = (char*) calloc(BUFFER_LEN, sizeof(char));
@@ -175,15 +234,33 @@ void retrFile(int controlfd, char* command){
 
     int pasivefd = openSocket(pasivePort, server);
 
-    writefd(controlfd, command);
+    RetrFile *retFile = (RetrFile *)malloc(sizeof(RetrFile));
 
-    readfdPrint(pasivefd);
+    retFile->command = command;
+
+    getFileParams(command, retFile);
+
+    writefd(controlfd, retFile->command);
+
+    bzero(buff, BUFFER_LEN);
+
+    readfd(pasivefd, buff, BUFFER_LEN);
+
+
+    writeInFile(retFile->localFileName != NULL ? 
+                         retFile->localFileName :
+                         retFile->remoteFileName , buff);
+
+    //free(retFile->remoteFileName);
+    free(retFile);
 
     readfdPrint(controlfd);
 
-    free(buff);
-    close(pasivefd);
+    writefd(controlfd, "\n");
+    readfdPrint(controlfd);
 
+    free(buff);
+    close(pasivefd);    
 }
 
 
