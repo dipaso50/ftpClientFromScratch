@@ -14,5 +14,7 @@ void readfd(int fd);
 int openSocket(int port, struct hostent* server);
 int calculatePasivePort(char *strip);
 int portFromServerResp();
-void listRemote(int controlfd);
+void listRemote(int controlfd, char* command);
+void quit(int controlfd);
+void retrFile(int controlfd, char* command);
 #endif

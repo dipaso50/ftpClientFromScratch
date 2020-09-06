@@ -11,8 +11,10 @@
 #include "srch.h"
 
 char buffer[256];
-char* CMD_LIST = "LIST\n";
+char* CMD_LIST = "LIST";
 char* CMD_PASV = "PASV\n";
+char* CMD_QUIT = "QUIT\n";
+char* CMD_RETR = "RETR";
 
 struct hostent *server;
 
@@ -62,7 +64,7 @@ int calculatePasivePort(char *strip){
 
      return pasivePort;
 }
-void listRemote(int controlfd){
+void listRemote(int controlfd, char* command){
 
     writefd(controlfd, CMD_PASV);
     readfd(controlfd);
@@ -71,7 +73,7 @@ void listRemote(int controlfd){
 
     int pasivefd = openSocket(pasivePort, server);
 
-     writefd(controlfd, CMD_LIST);
+     writefd(controlfd, command);
 
      readfd(pasivefd);
 
@@ -130,6 +132,29 @@ int openSocket(int port, struct hostent *server){
     return sockfd;
 }
 
+void quit(int controlfd){
+    writefd(controlfd, CMD_QUIT);
+    readfd(controlfd);
+}
+
+void retrFile(int controlfd, char* command){
+
+    writefd(controlfd, CMD_PASV);
+    readfd(controlfd);
+
+    int pasivePort = portFromServerResp();
+
+    int pasivefd = openSocket(pasivePort, server);
+
+    writefd(controlfd, command);
+
+    readfd(pasivefd);
+
+    readfd(controlfd);
+    readfd(controlfd);
+
+    close(pasivefd);
+}
 
 
 int main(int argc, char *argv[])
@@ -147,25 +172,36 @@ int main(int argc, char *argv[])
 
     controlfd = openSocket(portno, server);
 
-	readfd(controlfd);
+    readfd(controlfd);
 
-	while(1){		
-		printf(">>>");
+    while(1){		
+        printf(">>>");
 
-		bzero(buffer,256);
-		fgets(buffer,255,stdin);
+        bzero(buffer,256);
+        fgets(buffer,255,stdin);
 
-        if(strcmp(CMD_LIST, buffer) == 0){
+        char * cmdcpy = (char*) calloc(sizeof(char) , strlen(buffer));
+        strcpy(cmdcpy, buffer);
 
-            listRemote(controlfd);
-
+        if(startwith(buffer, CMD_LIST)){
+            listRemote(controlfd, cmdcpy);
+        }else if(startwith(buffer, CMD_RETR)){
+            retrFile(controlfd, cmdcpy);
+        }else if(strcmp(CMD_QUIT, buffer) == 0){
+            quit(controlfd);
+            break;
         }else{
-            //write uknow command in fd
-            writefd(controlfd, buffer);
+            writefd(controlfd, cmdcpy);
             readfd(controlfd);
         }
-	}
+
+        free(cmdcpy);
+
+    }
+
+    printf("Closing socket\n");
 
     close(controlfd);
+
     return 0;
 }
