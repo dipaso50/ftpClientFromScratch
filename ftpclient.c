@@ -16,6 +16,7 @@ char* CMD_LIST = "LIST";
 char* CMD_PASV = "PASV\n";
 char* CMD_QUIT = "QUIT\n";
 char* CMD_RETR = "RETR";
+char* FILE_NOT_FOUND = "550";
 
 struct hostent *server;
 
@@ -72,7 +73,9 @@ void listRemote(int controlfd, char* command){
 
     readfd(controlfd, buff, BUFFER_LEN);
 
+#if defined PRINTDEBUG
     printf("%s\n",buff);
+#endif
 
     int pasivePort = portFromServerResp(buff);
 
@@ -160,7 +163,28 @@ void quit(int controlfd){
     free(buff);
 }
 
+char* cleanFilename(char * originfn){
+
+    int k = linearSearch(originfn, strlen(originfn), '\n');
+
+    if(k == -1){
+        return originfn;
+    }
+
+    return substr(originfn, 0, k);
+}
+
 int writeInFile(char *filename, char* data){
+
+#if defined PRINTDEBUG
+    printf("Filename before (%s)\n", filename);
+#endif
+
+    filename = cleanFilename(filename);
+
+#if defined PRINTDEBUG
+    printf("Filename after (%s)\n", filename);
+#endif
 
     FILE *fp = fopen(filename,  "w");
      
@@ -210,7 +234,7 @@ RetrFile* getFileParams(char * command, RetrFile * ret){
      strcat(ret->command, "\n");
 
 #if defined PRINTDEBUG
-     printf("Params localFileName %s, remoteFileName %s, command %s",
+     printf("Params localFileName (%s), remoteFileName (%s), command (%s)",
              ret->localFileName, ret->remoteFileName ,
              ret->command);
 #endif
@@ -228,7 +252,9 @@ void retrFile(int controlfd, char* command){
 
     readfd(controlfd, buff,BUFFER_LEN );
 
+#if defined PRINTDEBUG
     printf("%s\n",buff);
+#endif
 
     int pasivePort = portFromServerResp(buff);
 
@@ -242,19 +268,27 @@ void retrFile(int controlfd, char* command){
 
     writefd(controlfd, retFile->command);
 
+    //read response to RETR
+    bzero(buff, BUFFER_LEN);
+    readfd(controlfd, buff, BUFFER_LEN);
+
+    if(startwith(buff, FILE_NOT_FOUND)){
+        //RETR file not found
+        printf("File %s not found in remote server.\n", 
+                 cleanFilename(retFile->remoteFileName));
+        return;
+    }
+
     bzero(buff, BUFFER_LEN);
 
     readfd(pasivefd, buff, BUFFER_LEN);
-
 
     writeInFile(retFile->localFileName != NULL ? 
                          retFile->localFileName :
                          retFile->remoteFileName , buff);
 
-    //free(retFile->remoteFileName);
     free(retFile);
 
-    readfdPrint(controlfd);
 
     writefd(controlfd, "\n");
     readfdPrint(controlfd);

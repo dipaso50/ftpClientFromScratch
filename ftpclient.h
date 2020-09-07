@@ -27,4 +27,5 @@ void quit(int controlfd);
 void retrFile(int controlfd, char* command);
 int writeInFile(char* filename, char* data);
 RetrFile* getFileParams(char * command, RetrFile * ret);
+char* cleanFilename(char * originfn);
 #endif
