@@ -12,10 +12,12 @@
 
 #define BUFFER_LEN 255
 
-char* CMD_LIST = "LIST";
-char* CMD_PASV = "PASV\n";
+char* CMD_LIST = "LIST"; //list directory
+char* CMD_PASV = "PASV\n"; //enter in pasive mode
 char* CMD_QUIT = "QUIT\n";
-char* CMD_RETR = "RETR";
+char* CMD_RETR = "RETR"; //retrieve file 
+char* CMD_CWD = "CWD"; //change working directory
+char* CMD_HELP = "HELP"; //change working directory
 char* FILE_NOT_FOUND = "550";
 
 struct hostent *server;
@@ -297,6 +299,22 @@ void retrFile(int controlfd, char* command){
     close(pasivefd);    
 }
 
+void printHelp(){
+    printf("*********************************************************************\n");
+    printf("LIST [remote directory] - List directory, default current.\n");
+
+    printf("RETR remoteFileName [localFileName] - Get remote file and store");
+    printf("in current local directory, for rename file define localFileName.\n");
+
+    printf("CWD directoryName - Change working directory.\n");
+
+    printf("CDUP - Change to parent directory.\n");
+
+    printf("QUIT - Close connection and exit.\n");
+
+    printf("HELP - Print available commands information.\n");
+    printf("*********************************************************************\n");
+}
 
 int main(int argc, char *argv[])
 {
@@ -334,9 +352,17 @@ int main(int argc, char *argv[])
 #endif
 
         if(startwith(buffer, CMD_LIST)){
+
             listRemote(controlfd, cmdcpy);
+
         }else if(startwith(buffer, CMD_RETR)){
+
             retrFile(controlfd, cmdcpy);
+
+        }else if(startwith(buffer, CMD_HELP)){
+
+            printHelp();
+
         }else if(strcmp(CMD_QUIT, buffer) == 0){
             quit(controlfd);
             break;
